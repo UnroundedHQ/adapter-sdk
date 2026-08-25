@@ -60,9 +60,14 @@ jobs:
           echo "dco: all commits signed off"
 
   gate:
-    # The single required check. Stable name; `if: always()` so a skipped gate after a
-    # failed dependency cannot read as passing.
-    if: always()
+    # The single required check. Stable name, so branch protection never needs editing.
+    #
+    # `!cancelled()` rather than `always()`: with `always()`, a run cancelled by the
+    # concurrency group still schedules `gate`, which then hangs queued forever and
+    # blocks the PR on a check that will never report. `!cancelled()` skips the gate on
+    # a superseded run — harmless, because the superseding run publishes its own gate —
+    # while still running it when a dependency *failed*, which is the case that matters.
+    if: ${{ !cancelled() }}
     needs: [build, dco]
     runs-on: ubuntu-latest
     steps:
