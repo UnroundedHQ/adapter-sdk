@@ -62,3 +62,4 @@ export interface HarnessAdapter {
   /** Current state. Anything the probe found unsupported must return `not_supported`. */
   snapshot(): Promise<AgentSnapshot[]>;
 }
+// canary: unsigned commit, to prove the DCO gate fails. Reverted after.
