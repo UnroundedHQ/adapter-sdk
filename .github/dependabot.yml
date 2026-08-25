@@ -1,8 +1,14 @@
 version: 2
 updates:
+  # Grouped: an ungrouped config opens one PR per dependency, which on a fresh org
+  # jams the Free-tier Actions concurrency limit and starves real PRs of runners.
   - package-ecosystem: github-actions
     directory: "/"
     schedule: { interval: weekly }
+    groups:
+      actions: { patterns: ["*"] }
   - package-ecosystem: npm
     directory: "/"
     schedule: { interval: weekly }
+    groups:
+      npm: { patterns: ["*"] }

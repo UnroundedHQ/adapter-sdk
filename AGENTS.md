@@ -24,7 +24,12 @@ section is the whole design.
 3. **Every commit needs `Signed-off-by`.** Use `git commit -s`. CI fails the PR
    otherwise, and an unsigned commit cannot be merged or later reused.
 
-4. **This is a public repo mirroring a proprietary one.** Nothing about Unrounded's
+4. **The `gate` job uses `if: ${{ !cancelled() }}`, never `if: always()`.** With
+   `always()`, a run cancelled by the concurrency group still schedules `gate`, which
+   hangs queued forever and blocks the PR on a check that never reports. Observed, not
+   theorised — it happened on the first canary PR.
+
+5. **This is a public repo mirroring a proprietary one.** Nothing about Unrounded's
    internals, unreleased plans, or customers belongs in this repo's code or docs.
 
 ## Changes
