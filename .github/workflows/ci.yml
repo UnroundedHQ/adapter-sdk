@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with: { version: 10 }
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - name: Test (must not skip)
+        run: |
+          set -o pipefail
+          pnpm test 2>&1 | tee test.log
+          if grep -qE '^. skipped [1-9]' test.log; then
+            echo "::error::A test was skipped. Skips hide failures; fail loudly instead."
+            exit 1
+          fi
+
+  dco:
+    # Without a sign-off on every commit, this code cannot later be reused in the
+    # proprietary app. Checked here rather than trusted.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with: { fetch-depth: 0 }
+      - name: Every commit is signed off
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for sha in $(git rev-list "$BASE".."$HEAD_SHA"); do
+            if ! git log -1 --format=%B "$sha" | grep -qiE '^Signed-off-by: .+ <.+@.+>$'; then
+              echo "::error::$sha has no Signed-off-by line"
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] || {
+            echo "Fix with: git rebase --signoff $BASE && git push --force-with-lease"
+            exit 1
+          }
+          echo "dco: all commits signed off"
+
+  gate:
+    # The single required check. Stable name; `if: always()` so a skipped gate after a
+    # failed dependency cannot read as passing.
+    if: always()
+    needs: [build, dco]
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          results='${{ toJSON(needs) }}'
+          echo "$results"
+          if echo "$results" | grep -qE '"result": *"(failure|cancelled)"'; then
+            echo "::error::One or more CI jobs failed or were cancelled."
+            exit 1
+          fi
+          echo "gate: all jobs succeeded or were skipped."

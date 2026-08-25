@@ -1,0 +1,15 @@
+{
+  "name": "@unrounded/adapter-sdk",
+  "version": "0.1.0",
+  "description": "Open adapter interface for Unrounded: define a harness by transport, command, auth, and a capability probe.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "files": ["src", "LICENSE", "README.md"],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"src/**/*.test.ts\"",
+    "check": "pnpm typecheck && pnpm test"
+  },
+  "devDependencies": { "typescript": "~5.6.2", "@types/node": "^24" }
+}
