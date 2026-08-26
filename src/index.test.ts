@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mark } from "./index.ts";
-import type { Capability, CapabilityRow } from "./index.ts";
+import { readFileSync } from "node:fs";
+import { isSupported, mark } from "./index.ts";
+import type { Capability, CapabilityRow, Support } from "./index.ts";
 
 test("every absence has a distinct, non-empty mark", () => {
   const marks = [
@@ -72,9 +73,10 @@ test("a timed-out probe is distinguishable from one that tested nothing", () => 
   assert.notDeepEqual(didNotSay.outcome, { kind: "ok" });
 });
 
-test("every capability the probe writes is in the vocabulary", () => {
-  // The twelve wire keys, in the order an operator reads them down a column.
-  const vocabulary: Capability[] = [
+test("every capability the probe writes is in the vocabulary, in order", () => {
+  // The twelve wire keys, in the order an operator reads them down a column — which is
+  // also the consumer's enum order, and so the order its BTreeMap iterates.
+  const vocabulary = [
     "identity",
     "tokens.used",
     "tokens.limit",
@@ -87,7 +89,35 @@ test("every capability the probe writes is in the vocabulary", () => {
     "turn.interrupt",
     "secrets.structured",
     "process.kill",
-  ];
+  ] as const satisfies readonly Capability[];
+
+  // `satisfies` above rejects a member that is not in `Capability`. This rejects a
+  // member of `Capability` that is not above: `Exclude` is `never` only when the two
+  // are the same set, and `ExpectNever` fails to compile when it is not. Without it a
+  // thirteenth member could be added to the union and no command would notice.
+  type ExpectNever<T extends never> = T;
+  type _NoMemberUnlisted = ExpectNever<Exclude<Capability, (typeof vocabulary)[number]>>;
+
   assert.equal(vocabulary.length, 12);
   assert.equal(new Set(vocabulary).size, 12);
+
+  // Order is not observable from a union type, so read it off the source instead. This
+  // is what makes the check run under `node --test`, which erases types entirely.
+  const src = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+  const union = src.slice(src.indexOf("export type Capability ="));
+  const declared = [...union.slice(0, union.indexOf(";")).matchAll(/"([^"]+)"/g)].map(
+    (m) => m[1],
+  );
+  assert.deepEqual(declared, [...vocabulary]);
+});
+
+test("`n/o` is truthy, so isSupported is the guard, not a bare if", () => {
+  const nothingObservable: Support = "n/o";
+  // The hazard, stated as an assertion: a bare `if` would take this branch.
+  assert.ok(nothingObservable);
+  assert.equal(isSupported(nothingObservable), false);
+  assert.equal(isSupported(true), true);
+  assert.equal(isSupported(false), false);
+  // An absent key is not supported either, and is not `false`.
+  assert.equal(isSupported(undefined), false);
 });

@@ -23,6 +23,8 @@ section is the whole design.
    question. Three different instructions to the operator — re-probe, do not bother, ask
    elsewhere. Collapsing any two loses the one the operator needed. `"n/o"` is never
    inferred from a missing or malformed value; the probe emits that exact string.
+   Beware that `"n/o"` is **truthy** and `tsc` will not flag a bare `if (supports[c])` —
+   compare `=== true`, or use `isSupported`.
 
 3. **An absent `outcome` is not `ok`.** It is optional only because rows written before
    the field existed omit it. Absent means the writer did not say. Do not add a default,
