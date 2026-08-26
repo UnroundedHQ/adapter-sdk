@@ -23,7 +23,11 @@ export const myHarness: HarnessAdapter = {
     return {
       harness: "my-harness",
       probedAt: new Date().toISOString(),
-      supports: { "tokens.used": true, "turn.interrupt": false },
+      supports: {
+        "tokens.used": true,
+        "turn.interrupt": false,
+        "thinking.channel": "n/o",
+      },
       notes: { "turn.interrupt": "No interrupt endpoint; kill and restart the process." },
     };
   },
@@ -47,8 +51,47 @@ rendered as zero tells an operator the agent is fine, and the entire product exi
 make that impossible.
 
 Three marks, never interchangeable: `·` zero · `n/s` cannot report · `?` stale.
-An absent key in `supports` means *the probe did not test it*, which is again not the
-same as `false`.
+A capability has three answers and an absent key is none of them. `true` tested and it
+can, `false` tested and it cannot, `"n/o"` tested and the harness emits nothing that
+answers the question either way — probing the same way will be silent again. An absent
+key means *the probe did not test it*. Never infer `"n/o"`: a probe emits that exact
+string or the value is invalid.
+
+Do not rely on truthiness. **`"n/o"` is a truthy string**, so `if (row.supports[c])`
+reads "the harness emits nothing that answers the question" as "supported", and
+TypeScript will not warn you — a bare `if` compiles clean; only assigning to `boolean`
+or switching exhaustively is an error. Write `row.supports[c] === true`, or use the
+exported `isSupported`.
+
+Nothing in this package makes a value invalid: it is a contract, not a validator. The
+enforcement is in Unrounded's row deserializer, which rejects anything that is not
+`true`, `false`, or the exact string `"n/o"`.
+
+## `outcome` is the runner's verdict, not the probe's
+
+`outcome` says what happened to the probe **run** — it ran, it timed out, it failed. A
+probe cannot report its own timeout, so the code that *ran* the probe writes this field.
+Without it a probe that timed out and a probe that ran and tested nothing are the same
+empty `supports`, and the operator gets a blank row. It is optional because rows written
+before it existed omit it — and an absent `outcome` means *the writer did not say*,
+never `ok`. Note that Unrounded's deserializer requires the field, so a row headed there
+should carry the runner's verdict.
+
+The adapter above is in-process: it returns a whole `CapabilityRow` and leaves `outcome`
+to its caller. A probe that is a separate executable is a narrower contract — it prints
+one JSON object on stdout carrying **only** what a probe determines:
+
+```json
+{
+  "supports": { "tokens.used": true, "thinking.channel": "n/o" },
+  "notes": { "turn.interrupt": "No interrupt endpoint; kill and restart the process." }
+}
+```
+
+`harness` and `probedAt` come from the harness config and the clock; `outcome` comes
+from the run. Printing any other key — `outcome` included — is not a partial success:
+Unrounded rejects the whole payload and the row becomes `failed`, costing the operator
+every capability of that harness rather than one key.
 
 ## Contributing
 
