@@ -23,8 +23,13 @@ export const myHarness: HarnessAdapter = {
     return {
       harness: "my-harness",
       probedAt: new Date().toISOString(),
-      supports: { "tokens.used": true, "turn.interrupt": false },
+      supports: {
+        "tokens.used": true,
+        "turn.interrupt": false,
+        "thinking.channel": "n/o",
+      },
       notes: { "turn.interrupt": "No interrupt endpoint; kill and restart the process." },
+      outcome: { kind: "ok" },
     };
   },
   async snapshot(): Promise<AgentSnapshot[]> {
@@ -47,8 +52,16 @@ rendered as zero tells an operator the agent is fine, and the entire product exi
 make that impossible.
 
 Three marks, never interchangeable: `·` zero · `n/s` cannot report · `?` stale.
-An absent key in `supports` means *the probe did not test it*, which is again not the
-same as `false`.
+A capability has three answers and an absent key is none of them. `true` tested and it
+can, `false` tested and it cannot, `"n/o"` tested and the harness emits nothing that
+answers the question either way — probing the same way will be silent again. An absent
+key means *the probe did not test it*. Never infer `"n/o"`: a probe emits that exact
+string or the value is invalid.
+
+`outcome` says what happened to the probe run. Without it a probe that timed out and a
+probe that ran and tested nothing are the same empty `supports`, and the operator gets a
+blank row. It is optional because rows written before it exists omit it — and an absent
+`outcome` means *the writer did not say*, never `ok`.
 
 ## Contributing
 

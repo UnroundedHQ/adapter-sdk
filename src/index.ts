@@ -25,14 +25,59 @@ export function mark(r: Reported<number>): string {
   }
 }
 
-/** Metrics and controls a harness may or may not expose. */
+/**
+ * Metrics and controls a harness may or may not expose.
+ *
+ * Ordered by what an operator reads down a matrix column, not alphabetically. The
+ * six members added after `0.1.0` are ones probes already discover in practice:
+ * `identity` (does the harness say which agent it is), `session.write` (can a turn
+ * be fed back in on stdin), `thinking.channel`, `tool.pairing` (does a tool result
+ * arrive tied to the call that made it), `turn.events`, and `secrets.structured`
+ * (a structured secret reference, versus a best-effort regex over the transcript).
+ */
 export type Capability =
+  | "identity"
   | "tokens.used"
   | "tokens.limit"
   | "session.read"
   | "session.stream"
+  | "session.write"
+  | "thinking.channel"
+  | "tool.pairing"
+  | "turn.events"
   | "turn.interrupt"
+  | "secrets.structured"
   | "process.kill";
+
+/**
+ * What a probe found out about one capability.
+ *
+ * `true` and `false` are unchanged: tested and it can, tested and it cannot. `"n/o"`
+ * is the third answer — the probe asked, and the harness emitted nothing that answers
+ * the question either way. It is not a fourth spelling of `false`, and it is not an
+ * absent key: the three are three different instructions. An absent key says re-probe;
+ * `false` says do not bother; `"n/o"` says probing the same way will be silent again,
+ * so the answer has to come from somewhere else.
+ *
+ * `"n/o"` is never inferred. A probe emits that exact string or the value is invalid —
+ * a missing, null, or malformed value is not quietly read as "nothing observable".
+ */
+export type Support = boolean | "n/o";
+
+/**
+ * What happened to the probe run itself.
+ *
+ * Without it, a probe that timed out and a probe that ran and tested nothing are the
+ * same empty `supports` object, and the operator is shown a blank row — the exact
+ * absence-reads-as-presence failure this SDK exists to prevent.
+ *
+ * `failed` carries the reason so the row can say why. The reason is written by the
+ * caller running the probe, never quoted back from the probe's own output.
+ */
+export type ProbeOutcome =
+  | { kind: "ok" }
+  | { kind: "timed_out" }
+  | { kind: "failed"; reason: string };
 
 /**
  * One row of the capability matrix. Written by {@link HarnessAdapter.probe} and by
@@ -41,10 +86,23 @@ export type Capability =
 export interface CapabilityRow {
   harness: string;
   probedAt: string;
-  /** Absent key means "the probe did not test it", which is not the same as false. */
-  supports: Partial<Record<Capability, boolean>>;
+  /**
+   * Absent key means "the probe did not test it", which is not the same as `false`
+   * and not the same as `"n/o"`. Nothing may fill an absent key in.
+   */
+  supports: Partial<Record<Capability, Support>>;
   /** Why a capability is unsupported, when the probe can tell. Shown to the operator. */
   notes?: Partial<Record<Capability, string>>;
+  /**
+   * What happened to the probe run. Optional, because every row written before this
+   * field existed omits it.
+   *
+   * An absent `outcome` means **the writer did not say**, and must never be read as
+   * `{ kind: "ok" }`. There is deliberately no default and no helper that supplies
+   * one; a reader that needs to know must handle `undefined` as its own case and
+   * render it as unknown, the same way it handles an absent `supports` key.
+   */
+  outcome?: ProbeOutcome;
 }
 
 export interface AgentSnapshot {
